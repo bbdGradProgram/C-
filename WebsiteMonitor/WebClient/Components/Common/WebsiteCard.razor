@@ -1,0 +1,101 @@
+@using Shared.DTOs
+@using WebClient.Services
+@using System.Text.Json
+@inject HttpClient Http
+
+<div class="main-cover">
+    <div class="top-bar-cover">
+        <div class="website">
+            <strong>@website.Url</strong>
+        </div>
+        <div class="percentage">
+            uptime:
+            &nbsp;
+            @uptimePercentage
+            %
+        </div>
+    </div>
+    <div class="bottom-cover">
+        @foreach (var log in results) {
+            <div class="@getClass(log)">
+
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public WebsiteGetDto website { get; set; }
+    public List<MonitorLogGetDto>? websiteLogs = new List<MonitorLogGetDto>();
+    public List<int> statuses = new List<int>();
+    public List<int?> results = new List<int?>();
+    public double uptimePercentage;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (website != null) {
+            while (true) {
+                await GetLogs();
+                await Task.Delay(300000);
+            }
+        }
+    }
+
+    public string getClass(int? log) {
+        if (log == null) {
+            return "empty";
+        } else if (log == 200) {
+            return "ok";
+        } else {
+            return "failed";
+        }
+    }
+
+    private async Task GetLogs()
+    {
+        try
+        {
+            Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthServices.AccessToken);
+            var response = await Http.GetAsync($"{AuthServices.APIHost}/api/Websites/{website.WebsiteID}/monitorlogs");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                websiteLogs = JsonSerializer.Deserialize<List<MonitorLogGetDto>>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                
+                if (websiteLogs.Count != 0) {
+                    uptimePercentage = (websiteLogs.FindAll(log => log.ResponseStatus == 200).Count / websiteLogs.Count) * 100;
+                } else {
+                    uptimePercentage = 0;
+                }
+                
+                websiteLogs.Reverse();
+                statuses = websiteLogs.Select(log => log.ResponseStatus).ToList();
+                
+                
+                for (int i = 0; i < 10; i++)
+                {
+                    if (i < statuses.Count)
+                    {
+                        results.Add(statuses[i]);
+                    }
+                    else
+                    {
+                        results.Add(null);
+                    }
+                }
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine("Failed to fetch monitor logs");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception while fetching websites: {ex.Message}");
+        }
+    }
+}

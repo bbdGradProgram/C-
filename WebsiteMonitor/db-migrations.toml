@@ -1,0 +1,5 @@
+[flyway]
+locations = ["filesystem:Server/Database"]
+
+[environments.default]
+locations = ["filesystem:Server/Database"]

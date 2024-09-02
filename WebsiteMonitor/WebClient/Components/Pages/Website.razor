@@ -1,0 +1,164 @@
+﻿@page "/addWebsite"
+@using System.Text.Json
+@using System.Text
+@using System.Net.Http
+@using Shared.DTOs
+@using WebClient.Services
+@using WebClient.Components.Common
+@inject HttpClient Http
+
+@if(AuthServices.AccessToken == null){
+    <div style="text-align: center; margin-top: 50px;">
+     <h1 style="font-size: 2.5rem; margin-bottom: 20px;">Not logged in. You can login on <a href="/">Home</a></h1>
+     </div>
+     return;
+}
+<div style="text-align: center; margin-top: 50px;">
+
+    <p style="font-size: 1.2rem; margin-bottom: 20px;">Please enter a website:</p>
+
+    <EditForm Model="@userWebsites" OnSubmit="SubmitForm" FormName="AddWebsite">
+        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+            <InputText @bind-Value="userWebsites!.Url" class="form-control mb-2" placeholder="Enter website URL" id="Website" required />
+            @if (!string.IsNullOrWhiteSpace(validationMessage))
+            {
+                <p style="color: red; margin: 0; font-size: 0.875rem;">@validationMessage</p>
+            }
+            <button type="submit" class="btn btn-primary">Add Website</button>
+        </div>
+    </EditForm>
+
+
+    <h3 style="font-size: 1.8rem; margin-bottom: 20px; font-weight: bold;">Your Websites:</h3>
+    @if (websites == null)
+    {
+        <p>Loading websites...</p>
+    }
+    else if (websites.Count == 0)
+    {
+        <p>No websites found.</p>
+    }
+    else
+    {
+        <div class="container">
+            @foreach (var website in websites) {
+                <WebsiteCard website="@website" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    private websiteUrl userWebsites { get; set; } = new();
+
+    private List<WebsiteGetDto>? websites;
+    private string validationMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if(AuthServices.AccessToken != null){
+            await FetchWebsites();
+        }
+    }
+
+    private async Task SubmitForm()
+    {
+        if (!await IsValidUrl(userWebsites!.Url))
+        {
+            validationMessage = "Invalid URL format";
+            return;
+        }
+
+        await AddWebsite(userWebsites!.Url!);
+        await FetchWebsites();
+        this.StateHasChanged();
+
+        userWebsites!.Url = "";
+    }
+
+    private async Task FetchWebsites()
+    {
+        try
+        {
+            Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthServices.AccessToken);
+            var response = await Http.GetAsync($"{AuthServices.APIHost}/api/Websites");
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                websites = JsonSerializer.Deserialize<List<WebsiteGetDto>>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            else
+            {
+                Console.WriteLine("Failed to fetch websites");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception while fetching websites: {ex.Message}");
+        }
+    }
+
+    private async Task AddWebsite(string url)
+    {
+        try
+        {
+            if (!await IsValidUrl(url))
+            {
+                Console.WriteLine("Invalid URL format.");
+            }
+
+            var requestDto = new
+            {
+                Url = url,
+                UserID = 1,
+            };
+
+            var jsonContent = JsonSerializer.Serialize(requestDto);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthServices.AccessToken);
+
+            try
+            {
+                Console.WriteLine("Trying to post this request: " + requestDto);
+
+                var response = await Http.PostAsync($"{AuthServices.APIHost}/api/Websites", content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    var newWebsite = JsonSerializer.Deserialize<WebsiteGetDto>(responseContent);
+
+                    Console.WriteLine("Post successful");
+                }
+                else
+                {
+                    Console.WriteLine("Error in posting website data with status code: " + response.StatusCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception occurred: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception occurred: {ex.Message}");
+        }
+    }
+
+    private async Task<bool> IsValidUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+        {
+            return false;
+        }
+        return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
+    }
+
+    public class websiteUrl
+    {
+        public string? Url { get; set; } = string.Empty;
+    }
+}

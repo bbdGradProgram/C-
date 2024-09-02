@@ -1,0 +1,92 @@
+﻿@page "/"
+@using System.Text.Json
+@using System.Text
+@using System.Net.Http
+@using Shared.DTOs
+@using WebClient.Services
+@inject HttpClient Http
+
+@if(AuthServices.AccessToken == null){
+    <div style="text-align: center; margin-top: 50px;">
+    <h1 style="font-size: 2.5rem; margin-bottom: 20px;">Welcome to Website Monitor Inc</h1>
+    <p style="font-size: 1.2rem; margin-bottom: 30px;">Please login before you proceed.</p>
+    <button class="btn btn-primary" style="font-size: 1rem;" @onclick="GetDeviceToken">Login with GitHub</button>
+    <p style="color: red; margin-top: 20px;font-size: 25px;">@message</p>
+    <p style="color: red; margin-top: 20px;font-size: 25px;">@status</p>
+    
+</div>
+}
+@if(AuthServices.AccessToken !=null){
+    <div style="text-align: center; margin-top: 50px;">
+    <h1 style="font-size: 2.5rem; margin-bottom: 20px;">Welcome to Website Monitor Inc</h1>
+    <p style="font-size: 1.2rem; margin-bottom: 30px;color: green; font-size:25px;">You are logged in.</p>
+    <button class="btn btn-primary" style="font-size: 1rem;" @onclick="LogOut">Logout</button>
+</div>
+
+}
+
+
+@code {
+    private string? message;
+    private string? status;
+    private bool clicked = false;
+
+    private void LogOut(){
+        AuthServices.AccessToken = null;
+    }
+    private async Task GetDeviceToken()
+    {
+        
+        if(clicked){
+            message = " loading...";
+             StateHasChanged(); // Notify the UI to update
+            return;
+        }
+        else{
+            clicked = true;
+            message = " already clicked. Relax";
+             StateHasChanged(); // Notify the UI to update
+        }
+        message ="getting user code...";
+        var DeviceCode = await AuthServices.GetUserCode();
+        if(DeviceCode == null)
+        {
+            message = "Error: Could not get device code";
+             StateHasChanged(); // Notify the UI to update
+            return;
+        }
+
+        message = "\n\nGo to https://github.com/login/device and enter the code \n" + DeviceCode.user_code + "\n\n";
+        StateHasChanged(); // Notify the UI to update
+         var AccessToken = await AuthServices.GetAccessToken(DeviceCode.device_code);
+        if (AccessToken != null)
+        {
+            message = "Access token received successfully";
+            StateHasChanged(); // Notify the UI to update
+            AuthServices.AccessToken = AccessToken;
+            return;
+        }
+
+        // Start polling for the access token based on the interval
+        int maxAttempts = 5;
+        int attempts = 0;
+
+        while (AccessToken == null && attempts < maxAttempts)
+        {
+            status = "Waiting for user to authorize...";
+            StateHasChanged(); // Notify the UI to update
+            await Task.Delay(10 * 1000); // Convert seconds to milliseconds
+
+            AccessToken = await AuthServices.GetAccessToken(DeviceCode.device_code);
+            attempts++;
+            if (AccessToken != null)
+            {
+                AuthServices.AccessToken = AccessToken;
+            }
+        }
+        if (AccessToken == null)
+        {
+            status = "Error: Could not get access token after " + maxAttempts + " attempts";
+        }
+    }
+}

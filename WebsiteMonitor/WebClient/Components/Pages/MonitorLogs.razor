@@ -1,0 +1,163 @@
+﻿@page "/monitorLogs"
+@attribute [StreamRendering]
+@using System.Text.Json
+@using System.Text
+@using System.Net.Http
+@using Shared.DTOs
+@using WebClient.Services
+@inject HttpClient Http
+
+@if(AuthServices.AccessToken == null){
+    <div style="text-align: center; margin-top: 50px;">
+     <h1 style="font-size: 2.5rem; margin-bottom: 20px;">Not logged in. You can login on <a href="/">Home</a></h1>
+     </div>
+     return;
+}
+
+<section style="text-align: center; margin-top: 50px;">
+    <h1 style="font-size: 2.5rem; margin-bottom: 20px;">Monitor Logs for Your Websites</h1>
+    <p style="font-size: 1.2rem; margin-bottom: 10px;">Select a website you'd like to view logs for</p>
+
+    <main style="display: flex; flex-direction: column; align-items: center;">
+        <select @bind="selectedWebsite" class="form-control" style="width: 600px; margin-bottom: 10px; text-align: center;">
+            <option value="">Choose a website...</option>
+            @if (websites != null && websites.Any())
+            {
+                @foreach (var website in websites)
+                {
+                    <option value="@website.Url">@website.Url</option>
+                }
+            }
+            else
+            {
+                <option value="" disabled>No websites available</option>
+            }
+        </select>
+        <button class="btn btn-primary" @onclick="() => StartMonitoring(selectedWebsite)" disabled="@(!IsWebsiteSelected)">Monitor</button>
+    </main>
+
+    <section style="margin-top: 20px;">
+        @if (monitorLogs != null)
+        {
+            @if (noLogsFound)
+            {
+                <p>No logs found for the selected website.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table" style="width: 50%; margin: auto;">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in monitorLogs)
+                            {
+                                <tr class="@GetRowClass(log.ResponseStatus)">
+                                    <td>@log.DateChecked</td>
+                                    <td>@log.ResponseStatus</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>
+
+</section>
+
+@code {
+    [SupplyParameterFromForm]
+    private websiteUrl test { get; set; } = new();
+    private string selectedWebsite { get; set; } = string.Empty;
+
+    private List<WebsiteGetDto>? websites;
+    private List<MonitorLogGetDto>? websiteLogs;
+    private List<MonitorLogGetDto>? monitorLogs;
+
+    private bool IsWebsiteSelected => !string.IsNullOrWhiteSpace(selectedWebsite);
+    private bool noLogsFound = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if(AuthServices.AccessToken != null){
+            await FetchWebsitesAsync();
+        }
+    }
+
+    private async void StartMonitoring(string selectedWebsite)
+    {
+        await GetLogs();
+    }
+
+    private async Task FetchWebsitesAsync()
+    {
+        try
+        {
+            Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthServices.AccessToken);
+            var response = await Http.GetAsync($"{AuthServices.APIHost}/api/Websites");
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                websites =  JsonSerializer.Deserialize<List<WebsiteGetDto>>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            else
+            {
+                Console.WriteLine("Failed to fetch websites");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception while fetching websites: {ex.Message}");
+        }
+    }
+
+    private async Task GetLogs()
+    {
+        try
+        {
+            var selectedWebsiteLog = websites?.FirstOrDefault(w => w.Url == selectedWebsite);
+            if (selectedWebsiteLog == null)
+            {
+                Console.WriteLine("Website not found.");
+                return;
+            }
+
+            Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthServices.AccessToken);
+            var response = await Http.GetAsync($"{AuthServices.APIHost}/api/Websites/{selectedWebsiteLog.WebsiteID}/monitorlogs");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                monitorLogs = JsonSerializer.Deserialize<List<MonitorLogGetDto>>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                noLogsFound = monitorLogs!.Count == 0;
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine("Failed to fetch monitor logs");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception while fetching websites: {ex.Message}");
+        }
+    }
+
+    private string GetRowClass(int responseStatus)
+    {
+        if (responseStatus >= 200 && responseStatus < 300)
+        {
+            return "table-success";
+        }
+        return "table-danger";
+    }
+    public class websiteUrl
+    {
+        public string? Url { get; set; } = string.Empty;
+    }
+}

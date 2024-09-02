@@ -1,0 +1,55 @@
+.main-cover {
+    position: relative;
+    width: 79vw;
+    height: fit-content;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border-radius: 0.5rem;
+    margin-inline: auto;
+    border: 2px solid transparent;
+    background: linear-gradient(71deg, #cecece, #a28da8, #8d6a98);
+    background-clip: padding-box;
+    padding: 10px;
+    justify-content: center;
+    align-items: center;
+}
+
+.top-bar-cover {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 10px;
+}
+
+.bottom-cover {
+    width: 100%;
+    justify-content: space-between;
+    display: flex;
+    flex-direction: row-reverse;
+    padding-right: 200px;
+    padding-left: 10px;
+}
+
+.empty {
+    background-color: gray;
+    width: 14px;
+    height: 28px;
+    border-radius: 9999px;
+}
+
+.ok {
+    background-color: green;
+    width: 14px;
+    height: 28px;
+    border-radius: 9999px;
+}
+
+.failed {
+    background-color: red;
+    width: 14px;
+    height: 28px;
+    border-radius: 9999px;
+}
